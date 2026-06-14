@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Macro AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f2f2f7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .ios-card { background: white; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .ios-input { background: #e3e3e8; border-radius: 12px; padding: 12px 16px; width: 100%; outline: none; }
+        .ios-input:focus { background: #d1d1d6; }
+        .ios-btn { background: #007aff; color: white; border-radius: 12px; padding: 14px; font-weight: 600; text-align: center; width: 100%; transition: 0.2s; }
+        .ios-btn:active { background: #005bb5; }
+    </style>
+</head>
+<body class="p-4 pb-10 text-gray-800">
+
+    <div id="setup-screen" class="hidden max-w-md mx-auto mt-10">
+        <h1 class="text-3xl font-bold mb-2">Willkommen 🍏</h1>
+        <p class="text-gray-500 mb-6">Bitte gib einmalig deinen Google Gemini API-Key ein. Er wird nur lokal auf deinem Handy gespeichert.</p>
+        <input type="text" id="api-key-input" class="ios-input mb-4" placeholder="AIzaSy...">
+        <button onclick="saveApiKey()" class="ios-btn">App starten</button>
+    </div>
+
+    <div id="app-screen" class="hidden max-w-md mx-auto">
+        <div class="flex justify-between items-center mb-6 mt-4">
+            <h1 class="text-2xl font-bold">Heute</h1>
+            <button onclick="resetData()" class="text-red-500 text-sm font-semibold">Leeren</button>
+        </div>
+
+        <div class="ios-card p-5 mb-4 text-center">
+            <p class="text-gray-500 text-sm font-medium mb-1">Gegessen / Ziel</p>
+            <h2 class="text-4xl font-bold"><span id="kcal-current">0</span> <span class="text-xl text-gray-400">/ 2500</span></h2>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                <div id="progress-bar" class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mb-6">
+            <div class="ios-card p-3 text-center">
+                <p class="text-xs text-gray-500 mb-1">Protein</p>
+                <p class="text-lg font-bold" id="protein-current">0g</p>
+            </div>
+            <div class="ios-card p-3 text-center">
+                <p class="text-xs text-gray-500 mb-1">Carbs</p>
+                <p class="text-lg font-bold" id="carbs-current">0g</p>
+            </div>
+            <div class="ios-card p-3 text-center">
+                <p class="text-xs text-gray-500 mb-1">Fett</p>
+                <p class="text-lg font-bold" id="fett-current">0g</p>
+            </div>
+        </div>
+
+        <div class="ios-card p-4 mb-6">
+            <p class="text-sm font-semibold mb-3">🎙️ Mahlzeit hinzufügen</p>
+            <input type="text" id="food-input" class="ios-input mb-3" placeholder="z.B. 4 Eier und 30g Aldi Sucuk">
+            <button onclick="addMeal()" id="submit-btn" class="ios-btn">Berechnen & Hinzufügen</button>
+        </div>
+
+        <h3 class="font-bold mb-3">Verlauf</h3>
+        <div id="meal-list" class="space-y-3">
+            </div>
+    </div>
+
+    <script>
+        // Lokalen Speicher initialisieren
+        let apiKey = localStorage.getItem('gemini_api_key');
+        let meals = JSON.parse(localStorage.getItem('meals')) || [];
+        let savedDate = localStorage.getItem('date') || new Date().toLocaleDateString();
+
+        // Tages-Reset
+        if (savedDate !== new Date().toLocaleDateString()) {
+            meals = [];
+            localStorage.setItem('meals', JSON.stringify(meals));
+            localStorage.setItem('date', new Date().toLocaleDateString());
+        }
+
+        // Screen Logik
+        if (!apiKey) {
+            document.getElementById('setup-screen').classList.remove('hidden');
+        } else {
+            document.getElementById('app-screen').classList.remove('hidden');
+            updateUI();
+        }
+
+        function saveApiKey() {
+            const key = document.getElementById('api-key-input').value;
+            if (key) {
+                localStorage.setItem('gemini_api_key', key);
+                location.reload();
+            }
+        }
+
+        function resetData() {
+            if(confirm("Heute wirklich alles löschen?")) {
+                meals = [];
+                localStorage.setItem('meals', JSON.stringify(meals));
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            let kcal = 0, protein = 0, carbs = 0, fett = 0;
+            const listEl = document.getElementById('meal-list');
+            listEl.innerHTML = '';
+
+            meals.forEach(meal => {
+                kcal += meal.kcal; protein += meal.protein; carbs += meal.carbs; fett += meal.fett;
+                
+                listEl.innerHTML += `
+                    <div class="ios-card p-3 flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold text-sm">${meal.beschreibung}</p>
+                            <p class="text-xs text-gray-500">${meal.uhrzeit}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-blue-600">${meal.kcal} kcal</p>
+                            <p class="text-xs text-gray-500">${meal.protein}P • ${meal.carbs}C • ${meal.fett}F</p>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('kcal-current').innerText = kcal;
+            document.getElementById('protein-current').innerText = protein + "g";
+            document.getElementById('carbs-current').innerText = carbs + "g";
+            document.getElementById('fett-current').innerText = fett + "g";
+            
+            let progress = Math.min((kcal / 2500) * 100, 100);
+            document.getElementById('progress-bar').style.width = progress + '%';
+        }
+
+        async function addMeal() {
+            const inputEl = document.getElementById('food-input');
+            const btnEl = document.getElementById('submit-btn');
+            const text = inputEl.value;
+            if (!text) return;
+
+            btnEl.innerText = "⏳ Lädt...";
+            btnEl.style.opacity = "0.7";
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        system_instruction: { parts: [{ text: "Du bist ein deutscher Ernährungsberater für deutsche Supermärkte (Aldi, Lidl, Rewe). Antworte AUSSCHLIESSLICH mit einem JSON-Objekt ohne Formatierung. Schlüssel: beschreibung (String), kcal (Integer), protein (Integer), carbs (Integer), fett (Integer)." }] },
+                        contents: [{ parts: [{ text: text }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    alert("API-Fehler. Stimmt dein Key?");
+                    localStorage.removeItem('gemini_api_key');
+                    location.reload();
+                    return;
+                }
+
+                const jsonStr = data.candidates[0].content.parts[0].text;
+                const werte = JSON.parse(jsonStr);
+                
+                werte.uhrzeit = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                meals.unshift(werte); // Oben hinzufügen
+                localStorage.setItem('meals', JSON.stringify(meals));
+                
+                inputEl.value = '';
+                updateUI();
+            } catch (err) {
+                alert("Fehler bei der Berechnung. Bitte nochmal versuchen.");
+                console.error(err);
+            }
+
+            btnEl.innerText = "Berechnen & Hinzufügen";
+            btnEl.style.opacity = "1";
+        }
+    </script>
+</body>
+</html>
